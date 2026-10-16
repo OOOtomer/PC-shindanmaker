@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>[hidden]{display:none!important} body{margin:0} img{max-width:100%}</style>
+<title>はじめての配信PC診断</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&family=BIZ+UDPGothic:wght@400;700&family=Azeret+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: one narrow "mixer strip" column. Header carries a level-meter progress bar;
+   one question at a time; the result reads like a BTO spec sheet. */
+:root {
+  --bg: #EDF0F4;
+  --surface: #FFFFFF;
+  --surface-2: #F4F6F9;
+  --ink: #1A2030;
+  --ink-soft: #586279;
+  --line: #D6DCE5;
+  --accent: #0E7C70;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #DCF0EC;
+  --amber: #A86A08;
+  --amber-soft: #FBF0DA;
+  --red: #CC3A3A;
+  --red-soft: #FAE2E2;
+  --meter-off: #D3D9E2;
+  --font-display: "Zen Maru Gothic", "Hiragino Maru Gothic ProN", "BIZ UDPGothic", sans-serif;
+  --font-body: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
+  --font-mono: "Azeret Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10131B; --surface: #191E2A; --surface-2: #212736; --ink: #E8EBF2; --ink-soft: #A2AABD;
+    --line: #2D3445; --accent: #3BBFAB; --accent-ink: #0A1917; --accent-soft: #15322E;
+    --amber: #E8A43A; --amber-soft: #382B15; --red: #FF6767; --red-soft: #3B1E22; --meter-off: #2A3041;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10131B; --surface: #191E2A; --surface-2: #212736; --ink: #E8EBF2; --ink-soft: #A2AABD;
+  --line: #2D3445; --accent: #3BBFAB; --accent-ink: #0A1917; --accent-soft: #15322E;
+  --amber: #E8A43A; --amber-soft: #382B15; --red: #FF6767; --red-soft: #3B1E22; --meter-off: #2A3041;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.7;
+  padding-inline: 16px;
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* ---------- header ---------- */
+.head { display: flex; flex-direction: column; gap: 10px; }
+.head-top { display: flex; align-items: center; gap: 10px; }
+.tally {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--meter-off);
+  flex: none;
+  transition: background .3s, box-shadow .3s;
+}
+.tally.on { background: var(--red); box-shadow: 0 0 0 4px var(--red-soft); }
+h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.45rem;
+  line-height: 1.3;
+  margin: 0;
+  text-wrap: balance;
+}
+.lead { margin: 0; color: var(--ink-soft); font-size: .92rem; }
+
+.meter { display: flex; align-items: center; gap: 10px; }
+.meter-bars { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; flex: 1; min-width: 0; }
+.seg { height: 8px; border-radius: 2px; background: var(--meter-off); transition: background .25s; }
+.seg.on { background: var(--accent); }
+.seg.on.hot { background: var(--amber); }
+.seg.on.peak { background: var(--red); }
+.meter-label {
+  font-family: var(--font-mono); font-weight: 500; font-size: .78rem;
+  color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* ---------- question ---------- */
+.qcard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.qnum {
+  font-family: var(--font-mono); font-weight: 600; font-size: .75rem;
+  letter-spacing: .08em; color: var(--accent);
+}
+.qtitle {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 1.3rem; line-height: 1.4; margin: 0; text-wrap: balance;
+}
+.qhint { margin: 0; color: var(--ink-soft); font-size: .9rem; }
+.qtext { display: flex; flex-direction: column; gap: 4px; }
+
+.opts { display: flex; flex-direction: column; gap: 10px; }
+.opt {
+  appearance: none;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  font: inherit; color: var(--ink);
+  background: var(--surface-2);
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 14px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.opt:hover { border-color: var(--accent); }
+.opt:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.opt-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.opt-label { font-weight: 700; font-size: 1rem; line-height: 1.45; }
+.opt-sub { font-size: .84rem; color: var(--ink-soft); line-height: 1.5; }
+.opt-mark {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid var(--line); background: var(--surface);
+  display: grid; place-items: center; flex: none;
+}
+.opt.multi .opt-mark { border-radius: 6px; }
+.opt[aria-pressed="true"] .opt-mark { background: var(--accent); border-color: var(--accent); }
+.opt-mark svg { width: 14px; height: 14px; opacity: 0; }
+.opt[aria-pressed="true"] .opt-mark svg { opacity: 1; }
+
+.nav { display: flex; gap: 10px; justify-content: space-between; align-items: center; }
+.btn {
+  appearance: none; font: inherit; font-weight: 700;
+  border-radius: 999px; padding: 11px 20px; cursor: pointer;
+  border: 1.5px solid var(--line); background: var(--surface); color: var(--ink);
+}
+.btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-soft); padding-inline: 8px; }
+
+/* ---------- result ---------- */
+.result { display: flex; flex-direction: column; gap: 24px; }
+.hero {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.eyebrow {
+  font-family: var(--font-mono); font-weight: 600; font-size: .72rem;
+  letter-spacing: .1em; color: var(--ink-soft); margin: 0;
+}
+.hero-gpu {
+  font-family: var(--font-mono); font-weight: 600;
+  font-size: clamp(1.5rem, 6vw, 2.1rem); line-height: 1.15; margin: 0;
+  letter-spacing: -.01em;
+}
+.hero-gpu small { font-size: .5em; font-weight: 500; color: var(--ink-soft); letter-spacing: 0; }
+.hero-line { margin: 0; font-size: .98rem; }
+.price-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+.price {
+  font-family: var(--font-mono); font-weight: 600; font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.price-cap { font-size: .82rem; color: var(--ink-soft); }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: .82rem; font-weight: 700;
+  padding: 3px 10px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent);
+  width: fit-content;
+}
+.pill.warn { background: var(--amber-soft); color: var(--amber); }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.callout {
+  border-radius: 12px; padding: 12px 14px; font-size: .92rem;
+  background: var(--surface-2); border: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.callout.warn { background: var(--amber-soft); border-color: transparent; }
+.callout strong { font-family: var(--font-display); }
+.callout p { margin: 0; }
+.callout ul { margin: 4px 0 0; padding-left: 1.2em; }
+
+section.block { display: flex; flex-direction: column; gap: 12px; }
+.block h2 {
+  font-family: var(--font-display); font-weight: 700;
+  font-size: 1.12rem; margin: 0; text-wrap: balance;
+  display: flex; align-items: center; gap: 8px;
+}
+.block h2::before { content: ""; width: 4px; height: 1.05em; border-radius: 2px; background: var(--accent); flex: none; }
+
+/* spec sheet */
+.sheet {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.row {
+  display: grid;
+  grid-template-columns: 7.2em 1fr;
+  gap: 4px 14px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--line);
+}
+.row:first-child { border-top: 0; }
+.row.key { background: var(--accent-soft); }
+.part { display: flex; flex-direction: column; gap: 1px; }
+.part b { font-family: var(--font-display); font-size: .98rem; }
+.part span { font-size: .75rem; color: var(--ink-soft); line-height: 1.4; }
+.spec { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.spec-val { font-weight: 700; font-size: 1rem; line-height: 1.5; }
+.spec-val .m { font-family: var(--font-mono); font-weight: 600; font-size: .95em; }
+.spec-note { font-size: .86rem; color: var(--ink-soft); line-height: 1.6; margin: 0; }
+.spec-alt { font-size: .8rem; color: var(--ink-soft); margin: 0; }
+.spec-alt b { color: var(--ink); font-weight: 700; }
+@media (max-width: 420px) {
+  .row { grid-template-columns: 1fr; }
+  .part { flex-direction: row; align-items: baseline; gap: 8px; }
+}
+
+.reasons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.reasons li {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start;
+  font-size: .92rem;
+}
+.reasons .tag {
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 600;
+  padding: 2px 8px; border-radius: 6px; margin-top: 2px;
+  background: var(--surface-2); border: 1px solid var(--line); color: var(--ink-soft);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.reasons .tag.up { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.reasons .tag.cap { color: var(--amber); border-color: var(--amber); background: var(--amber-soft); }
+
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 10px; }
+.steps li {
+  counter-increment: s;
+  display: grid; grid-template-columns: 26px 1fr; gap: 10px; font-size: .92rem;
+}
+.steps li::before {
+  content: counter(s);
+  font-family: var(--font-mono); font-weight: 600; font-size: .8rem;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1.5px solid var(--accent); color: var(--accent);
+}
+.steps b { font-family: var(--font-display); }
+
+.checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.checks label {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start;
+  font-size: .92rem; cursor: pointer;
+}
+.checks input { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--accent); }
+
+.memo {
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.memo pre {
+  margin: 0; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--font-body); font-size: .88rem; line-height: 1.7;
+  user-select: all;
+}
+.memo-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.copied { font-size: .85rem; color: var(--accent); font-weight: 700; }
+
+details {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 0 14px;
+}
+details + details { margin-top: 8px; }
+summary {
+  cursor: pointer; padding: 12px 0; font-weight: 700;
+  list-style: none; display: flex; justify-content: space-between; gap: 10px;
+}
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; font-family: var(--font-mono); color: var(--ink-soft); }
+details[open] summary::after { content: "−"; }
+summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+details p { margin: 0 0 12px; font-size: .9rem; color: var(--ink-soft); }
+
+.foot { font-size: .8rem; color: var(--ink-soft); margin: 0; }
+.foot-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+.fade { animation: fade .25s ease-out; }
+@keyframes fade { from { opacity: .35; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div class="head-top">
+      <span class="tally" id="tally" aria-hidden="true"></span>
+      <h1>はじめての配信PC診断</h1>
+    </div>
+    <p class="lead" id="lead">8つの質問に答えると、ゲーム＋配信に合ったPCのスペックが一覧で出ます。</p>
+    <div class="meter" aria-hidden="true">
+      <div class="meter-bars" id="meter"></div>
+      <span class="meter-label" id="meterLabel">1 / 8</span>
+    </div>
+  </header>
+
+  <main id="quiz"></main>
+  <main id="result" class="result" hidden></main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CHECK = '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" stroke="var(--accent-ink)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  var QUESTIONS = [
+    { id: "budget", type: "single", title: "予算はどのくらい？",
+      hint: "PC本体だけの金額で考えてください。モニター・マイク・カメラは別です。",
+      options: [
+        { v: 0, label: "〜22万円くらい" },
+        { v: 1, label: "22〜28万円" },
+        { v: 2, label: "28〜35万円" },
+        { v: 3, label: "35〜45万円" },
+        { v: 4, label: "45万円以上でもOK" },
+        { v: -1, label: "まだ決めてない", sub: "おすすめの金額を知りたい" }
+      ] },
+    { id: "games", type: "multi", title: "よく遊ぶ・遊びたいゲームは？",
+      hint: "近いものを全部選んでください（いくつでもOK）。",
+      options: [
+        { v: "light", w: 0, label: "ゆるい・軽めのゲーム", sub: "マイクラ、スターデューバレー、インディーゲームなど" },
+        { v: "anime", w: 0, label: "アニメ調のオープンワールド", sub: "原神、崩壊：スターレイル、鳴潮、ゼンレスゾーンゼロなど" },
+        { v: "standard", w: 1, label: "定番のオープンワールド・RPG", sub: "エルデンリング、パルワールド、ホグワーツ・レガシー、FF14など" },
+        { v: "heavy", w: 2, label: "最新の重い大作", sub: "モンハンワイルズ、サイバーパンク2077、黒神話：悟空など" },
+        { v: "fps", w: 0, label: "FPS・対戦ゲーム", sub: "Apex、VALORANT、フォートナイトなど" }
+      ] },
+    { id: "fps", type: "single", title: "FPS（撃ち合うゲーム）への熱量は？",
+      hint: "本気度によって「なめらかさ重視」の構成にするかを決めます。",
+      options: [
+        { v: 0, label: "ほとんどやらない" },
+        { v: 1, label: "誘われたらたまに遊ぶ" },
+        { v: 2, label: "けっこうやる・上手くなりたい" }
+      ] },
+    { id: "style", type: "single", title: "配信のスタイルにいちばん近いのは？",
+      hint: "迷ったら「まだ決めてない」でOKです。",
+      options: [
+        { v: "voice", label: "ゲーム画面＋声だけ" },
+        { v: "cam", label: "Webカメラで顔出し・手元出し" },
+        { v: "vt2d", label: "Vtuber（2D・Live2Dモデル）", sub: "VTube Studioなどでモデルを動かす" },
+        { v: "vt3d", label: "Vtuber（3Dモデル）", sub: "VRoidのモデルなどを動かす" },
+        { v: "undecided", label: "まだ決めてない" }
+      ] },
+    { id: "edit", type: "single", title: "動画の編集はする？",
+      hint: "配信のアーカイブから切り抜きを作るかどうかです。",
+      options: [
+        { v: 0, label: "しない・配信だけ" },
+        { v: 1, label: "たまに切り抜きやショートを作る" },
+        { v: 2, label: "がっつり編集した動画も出したい" }
+      ] },
+    { id: "res", type: "single", title: "使うモニターの画質は？",
+      hint: "わからなければ「フルHD」でOK。ふつうのモニターはだいたいこれです。",
+      options: [
+        { v: "fhd", label: "フルHD・わからない", sub: "いちばん一般的なモニター" },
+        { v: "wqhd", label: "WQHD（2K）", sub: "フルHDより一段キレイ" },
+        { v: "4k", label: "4K", sub: "とにかくキレイに遊びたい" }
+      ] },
+    { id: "years", type: "single", title: "どのくらいの期間使いたい？",
+      hint: "長く使うなら、これから出る新作のぶん少し余裕をもたせます。",
+      options: [
+        { v: 0, label: "3年くらい使えればOK" },
+        { v: 1, label: "5年くらい・新作もずっと追いかけたい" }
+      ] },
+    { id: "look", type: "multi", exclusive: "none", title: "見た目や置き場所の希望は？",
+      hint: "当てはまるものを全部選んでください。",
+      options: [
+        { v: "white", label: "白いPCがいい" },
+        { v: "rgb", label: "光るPCがいい" },
+        { v: "quiet", label: "静かさ重視" },
+        { v: "small", label: "小さめがいい" },
+        { v: "none", label: "特にこだわりなし" }
+      ] }
+  ];
+
+  var GPU = [
+    { name: "GeForce RTX 5060", mem: "8GB", price: [20, 25],
+      plain: "フルHDなら人気ゲームの多くが快適。重い最新作は画質を「中」くらいに下げて遊ぶイメージです。",
+      amd: "Radeon RX 9060 XT（16GB）" },
+    { name: "GeForce RTX 5060 Ti", mem: "16GB版", price: [23, 29],
+      plain: "フルHDなら重めのオープンワールドも快適で、配信しながらでも余裕があります。同じ名前で8GB版もあるので、必ず「16GB」を選んでください。",
+      amd: "Radeon RX 9060 XT（16GB）" },
+    { name: "GeForce RTX 5070", mem: "12GB", price: [27, 35],
+      plain: "モンハンワイルズ級の重いゲームも、フルHD〜WQHDで快適。配信用として一番バランスのいいクラスです。",
+      amd: "Radeon RX 9070" },
+    { name: "GeForce RTX 5070 Ti", mem: "16GB", price: [38, 48],
+      plain: "WQHDで重い最新作も高画質。4Kも視野に入り、何年か先の新作にも強いクラスです。",
+      amd: "Radeon RX 9070 XT" },
+    { name: "GeForce RTX 5080", mem: "16GB", price: [48, 62],
+      plain: "4K高画質を狙う上位モデル。配信目的でここまで必要な人は多くありません。",
+      amd: null }
+  ];
+
+  var BUDGET_LABEL = ["〜22万円", "22〜28万円", "28〜35万円", "35〜45万円", "45万円以上"];
+
+  var STORE_KEY = "haishin-pc-shindan-v1";
+  var state = { step: 0, answers: {} };
+  try {
+    var saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && typeof saved.step === "number" && saved.answers) state = saved;
+  } catch (e) { /* storage unavailable */ }
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+
+  var $quiz = document.getElementById("quiz");
+  var $result = document.getElementById("result");
+  var $meter = document.getElementById("meter");
+  var $meterLabel = document.getElementById("meterLabel");
+  var $tally = document.getElementById("tally");
+  var $lead = document.getElementById("lead");
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  function renderMeter(done) {
+    var n = QUESTIONS.length;
+    var html = "";
+    for (var i = 0; i < n; i++) {
+      var on = done ? true : i <= state.step;
+      var cls = "seg" + (on ? " on" : "") + (i === n - 2 ? " hot" : "") + (i === n - 1 ? " peak" : "");
+      html += '<span class="' + cls + '"></span>';
+    }
+    $meter.innerHTML = html;
+    $meterLabel.textContent = done ? "診断完了" : (state.step + 1) + " / " + n;
+    $tally.classList.toggle("on", !!done);
+  }
+
+  function isAnswered(q) {
+    var a = state.answers[q.id];
+    if (q.type === "multi") return Array.isArray(a) && a.length > 0;
+    return a !== undefined && a !== null;
+  }
+
+  function renderQuestion() {
+    var q = QUESTIONS[state.step];
+    renderMeter(false);
+    $result.hidden = true;
+    $quiz.hidden = false;
+    $lead.hidden = false;
+
+    var a = state.answers[q.id];
+    var opts = q.options.map(function (o, i) {
+      var pressed = q.type === "multi" ? (Array.isArray(a) && a.indexOf(o.v) >= 0) : a === o.v;
+      return '<button type="button" class="opt' + (q.type === "multi" ? " multi" : "") + '" id="opt-' + q.id + "-" + i + '" data-i="' + i + '" aria-pressed="' + pressed + '">' +
+        '<span class="opt-main"><span class="opt-label">' + esc(o.label) + "</span>" +
+        (o.sub ? '<span class="opt-sub">' + esc(o.sub) + "</span>" : "") + "</span>" +
+        '<span class="opt-mark">' + CHECK + "</span></button>";
+    }).join("");
+
+    var isLast = state.step === QUESTIONS.length - 1;
+    var showNext = q.type === "multi" || isAnswered(q);
+    $quiz.innerHTML =
+      '<div class="qcard fade">' +
+        '<div class="qtext"><span class="qnum">Q' + (state.step + 1) + "</span>" +
+        '<h2 class="qtitle">' + esc(q.title) + "</h2>" +
+        '<p class="qhint">' + esc(q.hint) + "</p></div>" +
+        '<div class="opts" role="group" aria-label="' + esc(q.title) + '">' + opts + "</div>" +
+        '<div class="nav">' +
+          '<button type="button" class="btn ghost" id="backBtn"' + (state.step === 0 ? " disabled" : "") + ">← もどる</button>" +
+          (showNext ? '<button type="button" class="btn primary" id="nextBtn"' + (isAnswered(q) ? "" : " disabled") + ">" + (isLast ? "結果を見る" : "次へ") + "</button>" : "") +
+        "</div>" +
+      "</div>";
+
+    $quiz.querySelectorAll(".opt").forEach(function (btn) {
+      btn.addEventListener("click", function () { choose(q, q.options[+btn.dataset.i].v); });
+    });
+    document.getElementById("backBtn").addEventListener("click", back);
+    var nb = document.getElementById("nextBtn");
+    if (nb) nb.addEventListener("click", next);
+  }
+
+  var advanceTimer = null;
+  function choose(q, v) {
+    if (q.type === "multi") {
+      var cur = Array.isArray(state.answers[q.id]) ? state.answers[q.id].slice() : [];
+      var idx = cur.indexOf(v);
+      if (idx >= 0) cur.splice(idx, 1);
+      else {
+        if (q.exclusive) {
+          if (v === q.exclusive) cur = [];
+          else cur = cur.filter(function (x) { return x !== q.exclusive; });
+        }
+        cur.push(v);
+      }
+      state.answers[q.id] = cur;
+      save();
+      renderQuestion();
+      return;
+    }
+    state.answers[q.id] = v;
+    save();
+    renderQuestion();
+    clearTimeout(advanceTimer);
+    advanceTimer = setTimeout(next, 260);
+  }
+
+  function next() {
+    clearTimeout(advanceTimer);
+    var q = QUESTIONS[state.step];
+    if (!isAnswered(q)) return;
+    if (state.step < QUESTIONS.length - 1) {
+      state.step++;
+      save();
+      renderQuestion();
+      focusTop();
+    } else {
+      state.step = QUESTIONS.length;
+      save();
+      renderResult();
+      focusTop();
+    }
+  }
+  function back() {
+    clearTimeout(advanceTimer);
+    if (state.step > 0) { state.step--; save(); renderQuestion(); }
+  }
+  function focusTop() {
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch (e) { window.scrollTo(0, 0); }
+  }
+
+  /* ---------- the logic ---------- */
+  function diagnose(a) {
+    var reasons = [];
+    var games = a.games || [];
+    var gq = QUESTIONS[1];
+    var gameNeed = 0, heaviest = null;
+    gq.options.forEach(function (o) {
+      if (games.indexOf(o.v) >= 0 && (heaviest === null || o.w >= heaviest.w)) heaviest = o;
+    });
+    if (heaviest) gameNeed = heaviest.w;
+    var need = gameNeed;
+    if (heaviest) {
+      var gameMsg = {
+        0: "軽め〜アニメ調のゲームが中心 → フルHDなら RTX 5060 クラスで快適",
+        1: "定番のオープンワールド（" + heaviest.sub.replace(/など$/, "") + "）→ RTX 5060 Ti クラスが目安",
+        2: "重い大作（モンハンワイルズなど）→ RTX 5070 クラスが目安"
+      }[gameNeed];
+      reasons.push({ tag: "基準", cls: "", text: gameMsg });
+    }
+
+    if (a.style === "vt3d" && need < 2) { need = 2; reasons.push({ tag: "UP", cls: "up", text: "3DのVtuberモデルを動かす → グラボに余裕が必要なので RTX 5070 クラス以上に" }); }
+    else if (a.style === "vt2d" && need < 1) { need = 1; reasons.push({ tag: "UP", cls: "up", text: "Live2Dモデル＋ゲーム＋配信を同時に動かす → グラボのメモリ16GBで安心に" }); }
+    if (a.fps === 2 && need < 1) { need = 1; reasons.push({ tag: "UP", cls: "up", text: "FPSも本気でやる → なめらかさのために一段上に" }); }
+    if (a.edit === 2 && need < 1) { need = 1; reasons.push({ tag: "UP", cls: "up", text: "がっつり動画編集 → 書き出しが速くなるよう一段上に" }); }
+
+    if (a.res === "wqhd") { need += 1; reasons.push({ tag: "+1", cls: "up", text: "WQHDモニター → 描く量が増えるのでグラボを1段階アップ" }); }
+    if (a.res === "4k") { need += 2; reasons.push({ tag: "+2", cls: "up", text: "4Kモニター → 描く量がフルHDの4倍なのでグラボを2段階アップ" }); }
+    if (a.years === 1) { need += 1; reasons.push({ tag: "+1", cls: "up", text: "5年くらい使いたい → これから出る新作のぶん1段階アップ" }); }
+    need = Math.min(need, 4);
+
+    var budget = a.budget;
+    var cap = budget < 0 ? 4 : budget;
+    var rec = Math.min(need, cap);
+    var status = budget < 0 ? "open" : need > cap ? "over" : need < cap ? "room" : "fit";
+    if (status === "over") {
+      reasons.push({ tag: "予算", cls: "cap", text: "予算（" + BUDGET_LABEL[budget] + "）に合わせて " + GPU[rec].name + " に調整" });
+    }
+    var alt = null;
+    if (status === "room" && rec < 4) alt = rec + 1;
+
+    /* CPU */
+    var cpu;
+    if (rec === 0) {
+      cpu = { name: "Ryzen 5 7500F ／ Core i5-14400F", tail: "クラス以上",
+        note: "ゲーム＋配信をこなせるライン。予算に余裕があれば Ryzen 7 にすると配信中の動作にさらに余裕が出ます。" };
+    } else {
+      cpu = { name: "Ryzen 7 7700 ／ Core Ultra 7 265F", tail: "クラス以上",
+        note: "ゲームをしながら配信ソフトやブラウザを同時に動かしても余裕があります。お店の表記で「Ryzen 7」「Core Ultra 7」「Core i7」が目印です。" };
+    }
+    if (a.fps === 2 && rec >= 2) {
+      cpu = { name: "Ryzen 7 9800X3D", tail: "",
+        note: "ゲームのなめらかさ（fps）が出やすいCPU。FPSを本気でやるならここに投資する価値があります。そのぶん価格は上がります。" };
+    } else if (a.edit === 2 && rec >= 2) {
+      cpu = { name: "Ryzen 9 9900X ／ Core Ultra 7 265F", tail: "クラス以上",
+        note: "コア数が多く、動画の書き出しが速いCPU。がっつり編集するなら効いてきます。" };
+    } else if (a.fps === 2) {
+      cpu.note += " FPSを本気でやるなら、予算が許せば Ryzen 7 9800X3D がなめらかさでは一番です。";
+    }
+
+    /* memory */
+    var mem = { val: "32GB", note: "ゲーム・配信ソフト・ブラウザを同時に開くので32GBが安心。標準が16GBのモデルなら、注文時に32GBへ変更してください。いまメモリは値上がりしていますが、配信するならここは削らないのがおすすめです。" };
+    if (a.edit === 2) mem.val = "32GB（できれば64GB）";
+
+    /* storage */
+    var big = gameNeed >= 1 || (a.edit || 0) >= 1 || a.years === 1;
+    var ssd = big
+      ? { val: "NVMe SSD 2TB", note: "オープンワールドは1本で100GB前後のものも多く、配信の録画も保存するなら2TBあると安心です。" }
+      : { val: "NVMe SSD 1TB", note: "軽めのゲーム中心なら1TBで足ります。録画をたくさん残すなら2TBに。" };
+
+    /* power */
+    var psu = rec <= 1 ? "650W以上・80PLUS GOLD" : rec === 2 ? "750W以上・80PLUS GOLD" : "850W以上・80PLUS GOLD";
+
+    /* cooling */
+    var look = a.look || [];
+    var cool;
+    if (look.indexOf("quiet") >= 0) cool = { val: "大きめの空冷クーラー か 240mm水冷", note: "静かさ重視なら、CPUクーラーを大きめにすると回転数が下がって静かになります。" };
+    else if (rec >= 3) cool = { val: "大型の空冷 か 水冷", note: "上位のグラボは熱も多めなので、冷却に少し余裕をもたせます。" };
+    else cool = { val: "空冷でOK", note: "お店の標準構成のままで大丈夫です。" };
+
+    /* monitor */
+    var mon;
+    if (a.res === "4k") mon = "4K・60〜144Hz";
+    else if (a.res === "wqhd") mon = a.fps === 2 ? "WQHD・165Hz以上" : "WQHD・144Hz前後";
+    else mon = a.fps === 2 ? "フルHD・240Hz" : a.fps === 1 ? "フルHD・144Hz前後" : "フルHD・60〜144Hz";
+
+    return { need: need, rec: rec, cap: cap, status: status, alt: alt, budget: budget,
+      reasons: reasons, cpu: cpu, mem: mem, ssd: ssd, psu: psu, cool: cool, mon: mon,
+      look: look, gameNeed: gameNeed, heaviest: heaviest };
+  }
+
+  function yen(r) { return "約" + r[0] + "〜" + r[1] + "万円"; }
+
+  function renderResult() {
+    var a = state.answers;
+    var d = diagnose(a);
+    var g = GPU[d.rec];
+    renderMeter(true);
+    $quiz.hidden = true;
+    $result.hidden = false;
+    $lead.hidden = true;
+
+    var pill;
+    if (d.status === "over") pill = '<span class="pill warn">理想より予算が少なめ</span>';
+    else if (d.status === "room") pill = '<span class="pill">予算に余裕あり</span>';
+    else if (d.status === "fit") pill = '<span class="pill">予算にぴったり</span>';
+    else pill = '<span class="pill">予算の目安：' + yen(g.price) + "</span>";
+
+    var extra = "";
+    if (d.status === "over") {
+      var ideal = GPU[d.need];
+      extra = '<div class="callout warn"><strong>理想は ' + esc(ideal.name) + "（" + yen(ideal.price) + "）</strong>" +
+        "<p>いまの予算でも遊べますが、重いゲームは画質設定を少し下げることになります。</p>" +
+        "<ul><li>メモリ32GBだけは削らない</li><li>BTOショップのセールを狙う（候補を決めて数週間ようすを見る）</li>" +
+        "<li>予算を上げられるなら " + esc(ideal.name) + " クラスが快適</li></ul></div>";
+    } else if (d.alt !== null) {
+      var up = GPU[d.alt];
+      extra = '<div class="callout"><strong>予算に余裕があるなら：' + esc(up.name) + "（" + yen(up.price) + "）</strong>" +
+        "<p>今の答えなら下のおすすめで十分です。ワンランク上げると、長く使えたり、高画質で遊べる余裕が増えます。</p></div>";
+    }
+
+    var hero =
+      '<div class="hero fade">' +
+        '<p class="eyebrow">診断結果 ・ おすすめのグラボ</p>' +
+        '<p class="hero-gpu">' + esc(g.name.replace("GeForce ", "")) + ' <small>' + esc(g.mem) + "</small></p>" +
+        '<p class="hero-line">' + esc(g.plain) + "</p>" +
+        '<div class="price-row"><span class="price">' + yen(g.price) + '</span><span class="price-cap">PC本体の相場目安（BTO完成品）</span></div>' +
+        pill + extra +
+      "</div>";
+
+    var rows = [
+      { key: true, part: "グラボ", aka: "絵を描く係", val: '<span class="m">' + esc(g.name) + "</span>（" + esc(g.mem) + "）",
+        note: "ゲームのキレイさとなめらかさはほぼここで決まります。配信するならGeForceが安心です。配信ソフトOBSの映像処理（NVENC）が軽くてキレイで、マイクのノイズ除去アプリ「NVIDIA Broadcast」も無料で使えます。",
+        alt: g.amd ? "安さ重視の別候補：<b>" + esc(g.amd) + "</b>" : "" },
+      { key: true, part: "CPU", aka: "司令塔", val: '<span class="m">' + esc(d.cpu.name) + "</span>" + (d.cpu.tail ? " " + esc(d.cpu.tail) : ""), note: d.cpu.note },
+      { part: "メモリ", aka: "作業机の広さ", val: esc(d.mem.val), note: d.mem.note },
+      { part: "SSD", aka: "本棚（保存場所）", val: esc(d.ssd.val), note: d.ssd.note },
+      { part: "電源", aka: "心臓", val: esc(d.psu), note: "ここを安くすると不安定の原因に。「GOLD」の表記があるものを選んでください。" },
+      { part: "冷却", aka: "エアコン", val: esc(d.cool.val), note: d.cool.note },
+      { part: "ネット", aka: "配信の通り道", val: "有線LAN（ケーブル）", note: "配信は通信が途切れると止まってしまうので、できればLANケーブルでつなぎます。どうしても無線なら、Wi-Fi 6E以上に対応したモデルにしてルーターの近くに置きます。" },
+      { part: "モニター", aka: "画面", val: esc(d.mon), note: "2枚目のモニターがあると、コメントや配信画面を見ながら遊べてかなり楽になります。" }
+    ];
+    var sheet = '<div class="sheet">' + rows.map(function (r) {
+      return '<div class="row' + (r.key ? " key" : "") + '">' +
+        '<div class="part"><b>' + r.part + "</b><span>" + r.aka + "</span></div>" +
+        '<div class="spec"><div class="spec-val">' + r.val + "</div>" +
+        '<p class="spec-note">' + esc(r.note) + "</p>" +
+        (r.alt ? '<p class="spec-alt">' + r.alt + "</p>" : "") +
+        "</div></div>";
+    }).join("") + "</div>";
+
+    var reasons = '<ul class="reasons">' + d.reasons.map(function (r) {
+      return '<li><span class="tag ' + r.cls + '">' + esc(r.tag) + "</span><span>" + esc(r.text) + "</span></li>";
+    }).join("") + "</ul>";
+
+    /* look tips */
+    var lookTips = [];
+    if (d.look.indexOf("white") >= 0) lookTips.push("白いモデルは、同じ中身の黒いモデルより少し高くなることが多いです。ショップの「ホワイトモデル」を探すと早いです。");
+    if (d.look.indexOf("rgb") >= 0) lookTips.push("光るPCは、ソフトで色や光り方を変えられるモデルが便利。配信画面の雰囲気に合わせられます。");
+    if (d.look.indexOf("quiet") >= 0) lookTips.push("静かさ重視なら、冷却を強めにしたうえで「静音ケース」を選ぶと、マイクにファンの音が入りにくくなります。");
+    if (d.look.indexOf("small") >= 0) lookTips.push(d.rec >= 3
+      ? "小さいケースは熱がこもりやすく、" + GPU[d.rec].name + " クラスだと選べる機種がかなり限られます。小ささを優先するなら RTX 5070 までが無難です。"
+      : "小さいケースは熱がこもりやすいので、ファンが多めの機種を選ぶと安心です。");
+    var lookBlock = lookTips.length
+      ? '<section class="block"><h2>見た目・置き場所の希望について</h2><ul class="reasons">' +
+        lookTips.map(function (t) { return '<li><span class="tag">メモ</span><span>' + esc(t) + "</span></li>"; }).join("") +
+        "</ul></section>"
+      : "";
+
+    /* shop checklist */
+    var checks = [];
+    if (d.rec === 1 || d.alt === 1) checks.push("「RTX 5060 Ti」なら「16GB」と書いてあるか（8GB版もあるので注意）");
+    checks.push("メモリが「32GB」になっているか（16GBなら変更する）");
+    checks.push("SSDの容量が " + (d.ssd.val.indexOf("2TB") >= 0 ? "2TB" : "1TB以上") + " になっているか");
+    checks.push("電源に「80PLUS GOLD」と書いてあるか");
+    checks.push("有線LANの端子があるか（ほぼ全部のゲーミングPCにあります）");
+    checks.push("保証期間と、電話やチャットのサポートがあるか");
+    var checkHtml = '<ul class="checks">' + checks.map(function (c, i) {
+      return '<li><label><input type="checkbox" id="chk-' + i + '"><span>' + esc(c) + "</span></label></li>";
+    }).join("") + "</ul>";
+
+    /* memo */
+    var styleLabel = { voice: "ゲーム画面＋声", cam: "Webカメラあり", vt2d: "Vtuber（Live2D）", vt3d: "Vtuber（3D）", undecided: "未定" }[a.style] || "未定";
+    var gameNames = (a.games || []).map(function (v) {
+      var o = QUESTIONS[1].options.filter(function (x) { return x.v === v; })[0];
+      return o ? o.label : "";
+    }).filter(Boolean).join("、");
+    var memo = [
+      "【配信用ゲーミングPC 希望スペック】",
+      "グラボ：" + g.name + "（" + g.mem + "）",
+      "CPU：" + d.cpu.name + (d.cpu.tail ? " " + d.cpu.tail : ""),
+      "メモリ：" + d.mem.val,
+      "SSD：" + d.ssd.val,
+      "電源：" + d.psu,
+      "冷却：" + d.cool.val,
+      "ネット：有線LAN",
+      "予算：" + (d.budget < 0 ? "未定（目安 " + yen(g.price) + "）" : BUDGET_LABEL[d.budget]),
+      "用途：" + (gameNames || "ゲーム") + " ＋ 配信（OBS・" + styleLabel + "）",
+      "オーディオIF：YAMAHA AG03MK2（USB-C接続）",
+      d.look.length && d.look.indexOf("none") < 0
+        ? "見た目：" + d.look.map(function (v) { return { white: "白", rgb: "光る", quiet: "静音", small: "小さめ" }[v]; }).join("・")
+        : ""
+    ].filter(Boolean).join("\n");
+
+    $result.innerHTML =
+      hero +
+      '<section class="block"><h2>おすすめスペック一覧</h2>' + sheet + "</section>" +
+      '<section class="block"><h2>この結果になった理由</h2>' + reasons + "</section>" +
+      lookBlock +
+      '<section class="block"><h2>AG03MK2 のつなぎ方</h2>' +
+        '<ol class="steps">' +
+          "<li><span><b>USB-Cケーブル1本でPCにつなぐ。</b>特別なスペックは要らないので、PC選びには影響しません。</span></li>" +
+          "<li><span><b>PC本体のUSB端子に直接さす。</b>USBハブ経由だと電力不足でノイズや切断が起きることがあります。</span></li>" +
+          "<li><span><b>ヤマハ公式サイトからドライバと「AG Controller」を入れる。</b>マイクの音質やエフェクトをPCから細かく調整できます。</span></li>" +
+          "<li><span><b>LOOPBACK（ループバック）を使うなら音の二重どりに注意。</b>ONにするとゲーム音と声をまとめて配信ソフトに送れます。そのとき配信ソフト側でもデスクトップ音声を拾うと、音が二重になったりエコーがかかったりします。</span></li>" +
+        "</ol>" +
+        '<p class="foot">AG03MK2はOBSの認証デバイスなので、配信ソフトOBSとの相性は良好です。</p>' +
+      "</section>" +
+      '<section class="block"><h2>お店で見るときのチェック</h2>' + checkHtml + "</section>" +
+      '<section class="block"><h2>お店の人や友だちに見せる用メモ</h2>' +
+        '<div class="memo"><pre id="memo">' + esc(memo) + "</pre>" +
+        '<div class="memo-actions"><button type="button" class="btn primary" id="copyBtn">メモをコピー</button><span class="copied" id="copied" aria-live="polite"></span></div></div>' +
+      "</section>" +
+      '<section class="block"><h2>よくある質問</h2>' +
+        "<details><summary>ノートPCじゃダメ？</summary><p>同じ性能だとデスクトップより高く、熱で性能が落ちやすいです。家で配信するならデスクトップがおすすめです。</p></details>" +
+        "<details><summary>GeForce と Radeon、どっちがいい？</summary><p>同じ値段ならRadeonのほうが性能が出ることもあります。ただ、配信ソフトの設定情報の多さや、ノイズ除去などの配信向けアプリを考えると、はじめてならGeForceが安心です。</p></details>" +
+        "<details><summary>自分で組み立てる（自作）のは？</summary><p>BTOショップ（ドスパラ、マウスコンピューター、パソコン工房、ツクモ、フロンティアなど）で完成品を買えば、保証とサポートがついて安心です。届いたら電源を入れるだけで使えます。</p></details>" +
+        "<details><summary>いつ買うのがお得？</summary><p>BTOショップはセールをよくやっているので、候補が決まったら数週間ようすを見るのも手です。ただ、2026年はメモリやグラボが値上がりしているので、待ちすぎには注意してください。</p></details>" +
+      "</section>" +
+      '<p class="foot">価格は2026年夏〜秋のBTOゲーミングPC相場をもとにした目安です。メモリやグラボの値上がりで変動が大きいので、買う直前にお店の価格を確認してください。</p>' +
+      '<div class="foot-actions"><button type="button" class="btn" id="editBtn">← 答えを直す</button><button type="button" class="btn" id="restartBtn">最初からやり直す</button></div>';
+
+    document.getElementById("copyBtn").addEventListener("click", function () {
+      var out = document.getElementById("copied");
+      var text = memo;
+      function fallback() {
+        var pre = document.getElementById("memo");
+        try {
+          var range = document.createRange();
+          range.selectNodeContents(pre);
+          var sel = window.getSelection();
+          sel.removeAllRanges(); sel.addRange(range);
+        } catch (e) { /* ignore */ }
+        out.textContent = "選択しました。長押し（Ctrl+C）でコピーしてください";
+      }
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { out.textContent = "コピーしました"; }, fallback);
+        } else fallback();
+      } catch (e) { fallback(); }
+    });
+    document.getElementById("editBtn").addEventListener("click", function () {
+      state.step = QUESTIONS.length - 1; save(); renderQuestion(); focusTop();
+    });
+    document.getElementById("restartBtn").addEventListener("click", function () {
+      state = { step: 0, answers: {} }; save(); renderQuestion(); focusTop();
+    });
+  }
+
+  /* expose for testing */
+  window.__diagnose = diagnose;
+
+  if (state.step >= QUESTIONS.length) renderResult();
+  else renderQuestion();
+})();
+</script>
